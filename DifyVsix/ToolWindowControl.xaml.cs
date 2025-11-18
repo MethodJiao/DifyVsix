@@ -64,60 +64,148 @@ namespace DifyVsix
             //mainViewModel = new MainViewModel();
             //this.mdview.DataContext = mainViewModel;
         }
-        private async void MyToolWindow_Loaded(object sender, RoutedEventArgs e)
+        private async Task Window_LoadedAsync(object sender, RoutedEventArgs e)
         {
-            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string appName = "YourAppName"; // 请替换为您的项目名称
-
-            string userDataFolder = System.IO.Path.GetFullPath(
-                System.IO.Path.Combine(localAppData, appName, "WebView2Data")
-            );
-            // 3. 创建 CoreWebView2Environment
-            var environment = await CoreWebView2Environment.CreateAsync(
-                browserExecutableFolder: null, // 使用默认 Edge 安装
-                userDataFolder: userDataFolder // 明确指定可写路径
-            );
-            // 确保初始化完成
-            await mdview.EnsureCoreWebView2Async(environment);
-
-            // 订阅 WebMessageReceived 事件
-            if (mdview.CoreWebView2 != null)
+            try
             {
-                mdview.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string appName = "YourAppName"; // 请替换为您的项目名称
 
-                // 确保启用了 Web 消息传递
-                // 默认通常是启用的，但最好检查一下
-                mdview.CoreWebView2.Settings.IsWebMessageEnabled = true;
+                string userDataFolder = System.IO.Path.GetFullPath(
+                    System.IO.Path.Combine(localAppData, appName, "WebView2Data")
+                );
+                // 3. 创建 CoreWebView2Environment
+                var environment = await CoreWebView2Environment.CreateAsync(
+                    browserExecutableFolder: null, // 使用默认 Edge 安装
+                    userDataFolder: userDataFolder // 明确指定可写路径
+                );
+                // 确保初始化完成
+                await mdview.EnsureCoreWebView2Async(environment);
+
+                // 订阅 WebMessageReceived 事件
+                if (mdview.CoreWebView2 != null)
+                {
+                    mdview.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+
+                    // 确保启用了 Web 消息传递
+                    // 默认通常是启用的，但最好检查一下
+                    mdview.CoreWebView2.Settings.IsWebMessageEnabled = true;
+                }
+
+                ////  加载本地 HTML 字符串
+                //string htmlContent = @"";
+                //mdview.NavigateToString(htmlContent);
+
+                string assemblyDir = System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+
+                // 假设 Step 1 中设置的 HTML 资源文件夹名为 'HtmlAssets'
+                string localAssetPath = System.IO.Path.Combine(assemblyDir, "HtmlAssets");
+
+                if (!Directory.Exists(localAssetPath))
+                {
+                    // 部署失败或路径错误
+                    System.Diagnostics.Debug.WriteLine($"错误：未找到 VSIX 资源路径：{localAssetPath}");
+                    return;
+                }
+
+                // 3. 设置虚拟主机名映射 (Virtual Hostname Mapping)
+                // 将 "vsix.local" 这个安全的 HTTPS 虚拟域名映射到本地文件夹
+                mdview.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "vsix.local",                               // 虚拟域名 (必须是 HTTPS 方案，例如 vsix.local)
+                    localAssetPath,                             // 实际本地文件夹路径
+                    CoreWebView2HostResourceAccessKind.Allow    // 允许访问
+                );
+
+                // 4. 导航到虚拟 URL
+                // 导航到 https://vsix.local/index.html
+                mdview.CoreWebView2.Navigate("https://vsix.local/index.html");
             }
-
-            ////  加载本地 HTML 字符串
-            //string htmlContent = @"";
-            //mdview.NavigateToString(htmlContent);
-
-            string assemblyDir = System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-
-            // 假设 Step 1 中设置的 HTML 资源文件夹名为 'HtmlAssets'
-            string localAssetPath = System.IO.Path.Combine(assemblyDir, "HtmlAssets");
-
-            if (!Directory.Exists(localAssetPath))
+            catch (Exception ex)
             {
-                // 部署失败或路径错误
-                System.Diagnostics.Debug.WriteLine($"错误：未找到 VSIX 资源路径：{localAssetPath}");
-                return;
+                Console.WriteLine($"窗体初始化失败: {ex}");
             }
+        }
+        private void MyToolWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            _ = Window_LoadedAsync(sender,e);
+        }
+        private async Task StreamingOutputAsync(StreamReader reader)
+        {
+            try
+            {
+                bool firstIn = true;
+                string alltext = "";
+                while (!reader.EndOfStream)
+                {
+                    // 异步读取一行数据
+                    var line = await reader.ReadLineAsync();
 
-            // 3. 设置虚拟主机名映射 (Virtual Hostname Mapping)
-            // 将 "vsix.local" 这个安全的 HTTPS 虚拟域名映射到本地文件夹
-            mdview.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                "vsix.local",                               // 虚拟域名 (必须是 HTTPS 方案，例如 vsix.local)
-                localAssetPath,                             // 实际本地文件夹路径
-                CoreWebView2HostResourceAccessKind.Allow    // 允许访问
-            );
+                    if (line == null)
+                        continue;
+                    const string DataPrefix = "data:";
+                    if (!line.StartsWith(DataPrefix))
+                        continue;
+                    // 提取 data: 后面的所有内容，并去除前后空白
+                    string jsonPayload = line.Substring(DataPrefix.Length).Trim();
 
-            // 4. 导航到虚拟 URL
-            // 导航到 https://vsix.local/index.html
-            mdview.CoreWebView2.Navigate("https://vsix.local/index.html");
+                    // 2. 使用 Newtonsoft.Json 进行反序列化
+                    DifySseData data = JsonConvert.DeserializeObject<DifySseData>(jsonPayload);
 
+                    if (data == null)
+                        continue;
+                    if (data.EventName != "message")
+                        continue;
+                    // 3. 成功解析，可以使用对象属性
+
+                    // 流式输出中
+
+                    alltext += data.Answer;
+                    if (firstIn)
+                    {
+                        string tempText = alltext;
+                        tempText = tempText
+                            .Replace("\\", "\\\\") // 先转义反斜杠
+                            .Replace("'", "\\'")   // 转义单引号
+                            .Replace("\"", "\\\"") // 转义双引号
+                            .Replace("\r\n", "\\n")// 处理换行符
+                            .Replace("\n", "\\n"); // 处理换行符
+                        string type = "bot";
+                        string jsCode = $"addMessage('{tempText}', '{type}');";
+                        try
+                        {
+
+                            string resultJson = await mdview.CoreWebView2.ExecuteScriptAsync(jsCode);
+                        }
+                        catch (System.Exception ex)
+                        {
+                            MessageBox.Show($"执行 JS 脚本出错: {ex.Message}", "C# 调用错误");
+                        }
+                        firstIn = false;
+                    }
+
+                    string tempTextAdd = alltext;
+                    tempTextAdd = tempTextAdd
+                        .Replace("\\", "\\\\") // 先转义反斜杠
+                        .Replace("'", "\\'")   // 转义单引号
+                        .Replace("\"", "\\\"") // 转义双引号
+                        .Replace("\r\n", "\\n")// 处理换行符
+                        .Replace("\n", "\\n"); // 处理换行符
+                    string setjsCode = $"setMessage('{tempTextAdd}');";
+                    try
+                    {
+                        string resultJson = await mdview.CoreWebView2.ExecuteScriptAsync(setjsCode);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        MessageBox.Show($"执行 JS 脚本出错: {ex.Message}", "C# 调用错误");
+                    }
+
+                }
+            }
+            catch (JsonException ex)
+            {
+                Console.WriteLine($"JSON解析失败: {ex.Message}");
+            }
         }
         private async Task CoreWebView2_WebMessageReceivedAsync(CoreWebView2WebMessageReceivedEventArgs e)
         {
@@ -148,85 +236,11 @@ namespace DifyVsix
                 var stream = await client.DownloadStreamAsync(request);
                 var reader = new StreamReader(stream, Encoding.UTF8);
                 // 循环读取，直到流结束 (即服务器断开连接)
-                bool firstIn = true;
-                string alltext = "";
-                while (!reader.EndOfStream)
-                {
-                    // 异步读取一行数据
-                    var line = await reader.ReadLineAsync();
-
-                    if (line == null)
-                        continue;
-                    const string DataPrefix = "data:";
-                    if (!line.StartsWith(DataPrefix))
-                        continue;
-                    // 提取 data: 后面的所有内容，并去除前后空白
-                    string jsonPayload = line.Substring(DataPrefix.Length).Trim();
-
-                    try
-                    {
-                        // 2. 使用 Newtonsoft.Json 进行反序列化
-                        DifySseData data = JsonConvert.DeserializeObject<DifySseData>(jsonPayload);
-
-                        if (data == null)
-                            continue;
-                        if (data.EventName != "message")
-                            continue;
-                        // 3. 成功解析，可以使用对象属性
-
-                        // 流式输出中
-
-                        alltext += data.Answer;
-                        if (firstIn)
-                        {
-                            string tempText = alltext;
-                            tempText = tempText
-                                .Replace("\\", "\\\\") // 先转义反斜杠
-                                .Replace("'", "\\'")   // 转义单引号
-                                .Replace("\"", "\\\"") // 转义双引号
-                                .Replace("\r\n", "\\n")// 处理换行符
-                                .Replace("\n", "\\n"); // 处理换行符
-                            string type = "bot";
-                            string jsCode = $"addMessage('{tempText}', '{type}');";
-                            try
-                            {
-
-                                string resultJson = await mdview.CoreWebView2.ExecuteScriptAsync(jsCode);
-                            }
-                            catch (System.Exception ex)
-                            {
-                                MessageBox.Show($"执行 JS 脚本出错: {ex.Message}", "C# 调用错误");
-                            }
-                            firstIn = false;
-                        }
-
-                        string tempTextAdd = alltext;
-                        tempTextAdd = tempTextAdd
-                            .Replace("\\", "\\\\") // 先转义反斜杠
-                            .Replace("'", "\\'")   // 转义单引号
-                            .Replace("\"", "\\\"") // 转义双引号
-                            .Replace("\r\n", "\\n")// 处理换行符
-                            .Replace("\n", "\\n"); // 处理换行符
-                        string setjsCode = $"setMessage('{tempTextAdd}');";
-                        try
-                        {
-                            string resultJson = await mdview.CoreWebView2.ExecuteScriptAsync(setjsCode);
-                        }
-                        catch (System.Exception ex)
-                        {
-                            MessageBox.Show($"执行 JS 脚本出错: {ex.Message}", "C# 调用错误");
-                        }
-
-                    }
-                    catch (JsonException ex)
-                    {
-                        Console.WriteLine($"JSON解析失败: {ex.Message}");
-                    }
-                }
+                await StreamingOutputAsync(reader);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"失败: {ex}");
+                Console.WriteLine($"流式请求失败: {ex}");
             }
         }
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
