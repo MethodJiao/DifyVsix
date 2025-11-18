@@ -57,7 +57,6 @@ namespace DifyVsix
         /// <summary>
         /// Initializes a new instance of the <see cref="ToolWindowControl"/> class.
         /// </summary>
-        private MainViewModel mainViewModel;
         public ToolWindowControl()
         {
             this.InitializeComponent();
