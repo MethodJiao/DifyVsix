@@ -5,7 +5,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
              xmlns:vsPlatformUI="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
-             xmlns:md="clr-namespace:MdXaml;assembly=MdXaml"
              xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
              Background="{DynamicResource {x:Static vsPlatformUI:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
              Foreground="{DynamicResource {x:Static vsPlatformUI:EnvironmentColors.ToolWindowTextBrushKey}}"
