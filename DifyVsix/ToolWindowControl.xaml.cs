@@ -1,15 +1,11 @@
-﻿
-using Microsoft.Web.WebView2.Core;
+﻿using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using RestSharp;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
-using System.Runtime.Remoting.Contexts;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -137,12 +133,9 @@ namespace DifyVsix
         /// <summary>
         /// Initializes a new instance of the <see cref="ToolWindowControl"/> class.
         /// </summary>
-        private MainViewModel mainViewModel;
         public ToolWindowControl()
         {
             this.InitializeComponent();
-            //mainViewModel = new MainViewModel();
-            //this.mdview.DataContext = mainViewModel;
         }
         private async System.Threading.Tasks.Task Window_LoadedAsync(object sender, RoutedEventArgs e)
         {
@@ -155,7 +148,7 @@ namespace DifyVsix
                     System.IO.Path.Combine(localAppData, appName, "WebView2Data")
                 );
                 // 3. 创建 CoreWebView2Environment
-                var environment = await CoreWebView2Environment.CreateAsync(
+                CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(
                     browserExecutableFolder: null, // 使用默认 Edge 安装
                     userDataFolder: userDataFolder // 明确指定可写路径
                 );
@@ -207,7 +200,7 @@ namespace DifyVsix
         }
         private void MyToolWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            _ = Window_LoadedAsync(sender,e);
+            _ = Window_LoadedAsync(sender, e);
         }
         private async System.Threading.Tasks.Task StreamingOutputAsync(StreamReader reader)
         {
@@ -279,7 +272,6 @@ namespace DifyVsix
                     {
                         MessageBox.Show($"执行 JS 脚本出错: {ex.Message}", "C# 调用错误");
                     }
-
                 }
             }
             catch (JsonException ex)
@@ -290,7 +282,7 @@ namespace DifyVsix
         private async System.Threading.Tasks.Task CoreWebView2_WebMessageReceivedAsync(CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
-            { 
+            {
                 // async 逻辑写这里
                 string message = e.TryGetWebMessageAsString();
 
