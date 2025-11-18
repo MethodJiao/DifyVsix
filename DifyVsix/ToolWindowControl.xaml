@@ -12,28 +12,8 @@
              d:DesignHeight="300" d:DesignWidth="300"
              Name="MyToolWindow" Loaded="MyToolWindow_Loaded">
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition/>
-            <RowDefinition Height="0"/> <!--原本是150-->
-        </Grid.RowDefinitions>
-        <Border Grid.Row="0">
-            <!--<md:MarkdownScrollViewer x:Name="mdview" Margin ="10" Markdown="{Binding MarkdownContent, Mode=OneWay}" KeyDown="inputText_KeyDown">
-                <md:MarkdownScrollViewer.MarkdownStyle>
-                    <Style TargetType="FlowDocument" BasedOn="{x:Static md:MarkdownStyle.Sasabune}">
-                    </Style>
-                </md:MarkdownScrollViewer.MarkdownStyle>
-            </md:MarkdownScrollViewer>-->
+        <Border>
             <wv2:WebView2 x:Name="mdview" />
         </Border>
-        <Border Grid.Row="1">
-            <StackPanel Margin="5,5,5,5">
-                <TextBox x:Name="inputText" TextWrapping="Wrap" Text="" Height="120" Background="{DynamicResource {x:Static vsPlatformUI:EnvironmentColors.ToolWindowBackgroundBrushKey}}" Foreground="{DynamicResource {x:Static vsPlatformUI:EnvironmentColors.ToolWindowTextBrushKey}}" KeyDown="inputText_KeyDown"/>
-                <Button Content="发送" Click="buttonSend_Click" x:Name="buttonSend" Grid.RowSpan="2" Height="20" Width="50" VerticalAlignment="Bottom" HorizontalAlignment="Right" Background="{DynamicResource {x:Static vsPlatformUI:EnvironmentColors.ToolWindowBackgroundBrushKey}}" Foreground="{DynamicResource {x:Static vsPlatformUI:EnvironmentColors.ToolWindowTextBrushKey}}"/>
-            </StackPanel>
-           
-        </Border>
-        
-
-
     </Grid>
 </UserControl>
