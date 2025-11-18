@@ -19,6 +19,11 @@ using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using static System.Net.Mime.MediaTypeNames;
+
+using EnvDTE;
+using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
+
 namespace DifyVsix
 {
     /// <summary>
@@ -54,6 +59,81 @@ namespace DifyVsix
     }
     public partial class ToolWindowControl : UserControl
     {
+
+        //读取解决方案
+        private void ReadWorkspace()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            DTE2 dte = (DTE2)Package.GetGlobalService(typeof(DTE));
+            if (dte == null || dte.Solution == null)
+            {
+                System.Diagnostics.Debug.WriteLine("未找到当前解决方案");
+                return;
+            }
+
+            string solutionName = dte.Solution.FullName;
+            System.Diagnostics.Debug.WriteLine($"当前解决方案: {solutionName}");
+
+            foreach (Project project in dte.Solution.Projects)
+            {
+                System.Diagnostics.Debug.WriteLine($"项目: {project.Name}");
+                try
+                {
+                    foreach (ProjectItem item in project.ProjectItems)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"  文件: {item.Name}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"读取项目文件失败: {ex.Message}");
+                }
+            }
+        }
+
+        //读取当前文件
+        private void ReadCurrentFileContent()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            DTE2 dte = (DTE2)Package.GetGlobalService(typeof(DTE));
+            if (dte == null || dte.ActiveDocument == null)
+            {
+                System.Diagnostics.Debug.WriteLine("未找到当前打开的文件");
+                return;
+            }
+
+            string filePath = dte.ActiveDocument.FullName;
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            {
+                System.Diagnostics.Debug.WriteLine("当前文件路径无效或文件不存在");
+                return;
+            }
+
+            try
+            {
+                string fileContent = System.IO.File.ReadAllText(filePath, Encoding.UTF8);
+                System.Diagnostics.Debug.WriteLine($"当前文件路径: {filePath}");
+                System.Diagnostics.Debug.WriteLine($"文件内容:\n{fileContent}");
+
+                // 如果需要传递到前端 WebView2，可以这样：
+                string safeContent = fileContent
+                    .Replace("\\", "\\\\")
+                    .Replace("'", "\\'")
+                    .Replace("\"", "\\\"")
+                    .Replace("\r\n", "\\n")
+                    .Replace("\n", "\\n");
+
+                string jsCode = $"showFileContent('{safeContent}');";
+                _ = mdview.CoreWebView2.ExecuteScriptAsync(jsCode);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"读取文件失败: {ex.Message}");
+            }
+        }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="ToolWindowControl"/> class.
         /// </summary>
@@ -64,7 +144,7 @@ namespace DifyVsix
             //mainViewModel = new MainViewModel();
             //this.mdview.DataContext = mainViewModel;
         }
-        private async Task Window_LoadedAsync(object sender, RoutedEventArgs e)
+        private async System.Threading.Tasks.Task Window_LoadedAsync(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -129,7 +209,7 @@ namespace DifyVsix
         {
             _ = Window_LoadedAsync(sender,e);
         }
-        private async Task StreamingOutputAsync(StreamReader reader)
+        private async System.Threading.Tasks.Task StreamingOutputAsync(StreamReader reader)
         {
             try
             {
@@ -207,7 +287,7 @@ namespace DifyVsix
                 Console.WriteLine($"JSON解析失败: {ex.Message}");
             }
         }
-        private async Task CoreWebView2_WebMessageReceivedAsync(CoreWebView2WebMessageReceivedEventArgs e)
+        private async System.Threading.Tasks.Task CoreWebView2_WebMessageReceivedAsync(CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
             { 
@@ -246,6 +326,10 @@ namespace DifyVsix
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             _ = CoreWebView2_WebMessageReceivedAsync(e);
+            //调用读取环境
+            ReadWorkspace();
+            //调用读取当前文件内容
+            ReadCurrentFileContent();
         }
     }
 }
