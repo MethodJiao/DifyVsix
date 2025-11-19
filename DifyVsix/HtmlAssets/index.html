@@ -15,14 +15,14 @@
         }
 
         :root {
-            --vscode-bg: #1e1e1e;
-            --vscode-sidebar: #252526;
+            --vscode-bg: #252526;
+            --vscode-sidebar: #2D2D30;
             --vscode-text: #cccccc;
-            --vscode-button: #0e639c;
-            --vscode-button-hover: #1177bb;
+            --vscode-button: #007ACC;
+            --vscode-button-hover: #1C97EA;
             --vscode-border: #454545;
-            --vscode-input-bg: #3c3c3c;
-            --vscode-selection: #264f78;
+            --vscode-input-bg: #333333;
+            --vscode-selection: #264F78;
             --vscode-highlight: #37373d;
         }
 
@@ -67,7 +67,7 @@
 
             .chat-messages::-webkit-scrollbar-thumb {
                 background-color: var(--vscode-border);
-                border-radius: 3px;
+                border-radius: 2px;
             }
 
                 .chat-messages::-webkit-scrollbar-thumb:hover {
@@ -87,7 +87,7 @@
         .message-content {
             max-width: 100%;
             padding: 10px 12px;
-            border-radius: 4px;
+            border-radius: 2px;
             margin: 0 8px;
             border: 1px solid var(--vscode-border);
             font-size: 12px;
@@ -97,7 +97,7 @@
 
         .message-content pre {
             margin: 8px 0;
-            border-radius: 3px;
+            border-radius: 2px;
             overflow-x: auto;
         }
 
@@ -105,7 +105,7 @@
             font-family: 'Consolas', 'Monaco', monospace;
             background-color: rgba(0, 0, 0, 0.2);
             padding: 2px 4px;
-            border-radius: 3px;
+            border-radius: 2px;
         }
 
         .message-content p {
@@ -120,7 +120,7 @@
         .message-content img {
             max-width: 100%;
             height: auto;
-            border-radius: 3px;
+            border-radius: 2px;
             margin: 8px 0;
         }
 
@@ -145,7 +145,7 @@
             gap: 8px;
             padding: 8px;
             background: var(--vscode-sidebar);
-            border-radius: 3px;
+            border-radius: 2px;
             margin-top: 8px;
         }
 
@@ -153,7 +153,7 @@
             flex: 1;
             padding: 8px 10px;
             border: 1px solid var(--vscode-border);
-            border-radius: 3px;
+            border-radius: 2px;
             font-size: 12px;
             outline: none;
             background-color: var(--vscode-input-bg);
@@ -170,9 +170,10 @@
             }
 
         button.send-button {
+            height: 100%;
             padding: 6px 12px;
             border: none;
-            border-radius: 3px;
+            border-radius: 2px;
             background-color: var(--vscode-button);
             color: var(--vscode-text);
             cursor: pointer;
