@@ -159,10 +159,10 @@ namespace DifyVsix
                 if (mdview.CoreWebView2 != null)
                 {
                     mdview.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
-
-                    // 确保启用了 Web 消息传递
-                    // 默认通常是启用的，但最好检查一下
-                    mdview.CoreWebView2.Settings.IsWebMessageEnabled = true;
+                   // 确保启用了 Web 消息传递
+                   // 默认通常是启用的，但最好检查一下
+                   mdview.CoreWebView2.Settings.IsWebMessageEnabled = true;
+                   mdview.ZoomFactor = 1.0;
                 }
 
                 ////  加载本地 HTML 字符串
