@@ -315,13 +315,38 @@ namespace DifyVsix
                 Console.WriteLine($"流式请求失败: {ex}");
             }
         }
+        private void DteCommand_FileCompare(string file1Path, string file2Path)
+        {
+            DTE2 dte = (DTE2)Package.GetGlobalService(typeof(DTE));
+            if (dte == null || dte.ActiveDocument == null)
+            {
+                System.Diagnostics.Debug.WriteLine("未找到当前打开的文件");
+                return;
+            }
+            const string gitCommand = "Tools.DiffFiles";
+            string arguments = $"\"{file1Path}\" \"{file2Path}\"";
+            try
+            {
+                // 3. 执行命令
+                // 参数通常是可选的，这里不需要参数
+                dte.ExecuteCommand(gitCommand,arguments);
+            }
+            catch (Exception ex)
+            {
+                // 捕获命令执行失败
+                Console.WriteLine($"文件对比失败: {ex}");
+            }
+        }
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             _ = CoreWebView2_WebMessageReceivedAsync(e);
+            ThreadHelper.ThrowIfNotOnUIThread();
             //调用读取环境
             ReadWorkspace();
             //调用读取当前文件内容
             ReadCurrentFileContent();
+            //文件对比
+            //DteCommand_FileCompare("C:\\Users\\Method-Jiao\\Desktop\\1.cpp", "C:\\Users\\Method-Jiao\\Desktop\\2.cpp");
         }
     }
 }
