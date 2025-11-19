@@ -57,8 +57,10 @@ namespace DifyVsix
     public partial class ToolWindowControl : UserControl
     {
 
-        //读取解决方案
+        private string conversationId;
         private OptionPage optionPage;
+
+        //读取解决方案
         private void ReadWorkspace()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -161,10 +163,10 @@ namespace DifyVsix
                 if (mdview.CoreWebView2 != null)
                 {
                     mdview.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
-                   // 确保启用了 Web 消息传递
-                   // 默认通常是启用的，但最好检查一下
-                   mdview.CoreWebView2.Settings.IsWebMessageEnabled = true;
-                   mdview.ZoomFactor = 1.0;
+                    // 确保启用了 Web 消息传递
+                    // 默认通常是启用的，但最好检查一下
+                    mdview.CoreWebView2.Settings.IsWebMessageEnabled = true;
+                    mdview.ZoomFactor = 1.0;
                 }
 
                 ////  加载本地 HTML 字符串
@@ -281,6 +283,7 @@ namespace DifyVsix
 
                     if (data == null)
                         continue;
+                    this.conversationId = data.ConversationId;
                     if (data.EventName != "message")
                         continue;
                     // 3. 成功解析，可以使用对象属性
@@ -359,7 +362,10 @@ namespace DifyVsix
                 request.AddHeader("Accept-Encoding", "gzip, deflate, br");
                 request.AddHeader("User-Agent", "PostmanRuntime-ApipostRuntime/1.1.0");
                 request.AddHeader("Connection", "keep-alive");
-                request.AddParameter("application/json", "{\"inputs\":{},\"query\":\"" + message + "\",\"response_mode\":\"streaming\",\"conversation_id\":\"\",\"user\":\"abc-123\"}", ParameterType.RequestBody);
+                request.AddParameter("application/json", "{\"inputs\":{},\"query\":\"" + 
+                    message + "\",\"response_mode\":\"streaming\",\"conversation_id\":\"" + 
+                    conversationId + "\",\"user\":\""+ optionPage.UserName + "\"}", ParameterType.RequestBody);
+
                 var stream = await client.DownloadStreamAsync(request);
                 var reader = new StreamReader(stream, Encoding.UTF8);
                 // 循环读取，直到流结束 (即服务器断开连接)
@@ -384,7 +390,7 @@ namespace DifyVsix
             {
                 // 3. 执行命令
                 // 参数通常是可选的，这里不需要参数
-                dte.ExecuteCommand(gitCommand,arguments);
+                dte.ExecuteCommand(gitCommand, arguments);
             }
             catch (Exception ex)
             {
@@ -394,10 +400,17 @@ namespace DifyVsix
         }
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
+            //用户名校验
+            if(string.IsNullOrWhiteSpace(optionPage.UserName))
+            {
+                MessageBox.Show($"进入[扩展]->[AICoding设置]内配置用户名", "未正确配置用户名");
+                return;
+            }
+            
             ThreadHelper.ThrowIfNotOnUIThread();
 
             _ = CoreWebView2_WebMessageReceivedAsync(e);
-            
+
             //调用读取环境
             ReadWorkspace();
             //调用读取当前文件内容

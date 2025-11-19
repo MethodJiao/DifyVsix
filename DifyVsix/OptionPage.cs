@@ -11,6 +11,10 @@ namespace DifyVsix
     [Guid("e77de72c-f79b-4ecb-9ca4-5da4c3ba9d51")]
     public class OptionPage : DialogPage
     {
+        [Category("用户信息")]
+        [DisplayName("用户名")]
+        [Description("请输入用户名")]
+        public string UserName { get; set; } = "";
         // --- IP 地址配置 ---
         [Category("服务器连接")]
         [DisplayName("服务器地址")]
