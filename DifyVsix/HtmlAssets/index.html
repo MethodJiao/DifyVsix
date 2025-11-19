@@ -17,7 +17,7 @@
         :root {
             --vscode-bg: #252526;
             --vscode-sidebar: #2D2D30;
-            --vscode-text: #cccccc;
+            --vscode-text: #F1F1F1;
             --vscode-button: #007ACC;
             --vscode-button-hover: #1C97EA;
             --vscode-border: #454545;
@@ -95,41 +95,41 @@
             /* word-wrap: break-word; */
         }
 
-        .message-content pre {
-            margin: 8px 0;
-            border-radius: 2px;
-            overflow-x: auto;
-        }
+            .message-content pre {
+                margin: 8px 0;
+                border-radius: 2px;
+                overflow-x: auto;
+            }
 
-        .message-content code {
-            font-family: 'Consolas', 'Monaco', monospace;
-            background-color: rgba(0, 0, 0, 0.2);
-            padding: 2px 4px;
-            border-radius: 2px;
-        }
+            .message-content code {
+                font-family: 'Consolas', 'Monaco', monospace;
+                background-color: rgba(0, 0, 0, 0.2);
+                padding: 2px 4px;
+                border-radius: 2px;
+            }
 
-        .message-content p {
-            margin: 8px 0;
-        }
+            .message-content p {
+                margin: 8px 0;
+            }
 
-        .message-content ul, .message-content ol {
-            margin: 8px 0;
-            padding-left: 20px;
-        }
+            .message-content ul, .message-content ol {
+                margin: 8px 0;
+                padding-left: 20px;
+            }
 
-        .message-content img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 2px;
-            margin: 8px 0;
-        }
+            .message-content img {
+                max-width: 100%;
+                height: auto;
+                border-radius: 2px;
+                margin: 8px 0;
+            }
 
-        .message-content blockquote {
-            border-left: 3px solid var(--vscode-button);
-            margin: 8px 0;
-            padding-left: 10px;
-            color: #a0a0a0;
-        }
+            .message-content blockquote {
+                border-left: 3px solid var(--vscode-button);
+                margin: 8px 0;
+                padding-left: 10px;
+                color: #a0a0a0;
+            }
 
         .message.bot .message-content {
             background-color: var(--vscode-highlight);
@@ -228,10 +228,10 @@
             const messagesDiv = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
-            
+
             // 配置 marked 选项
             marked.setOptions({
-                highlight: function(code, language) {
+                highlight: function (code, language) {
                     if (language && hljs.getLanguage(language)) {
                         return hljs.highlight(code, { language: language }).value;
                     }
@@ -269,7 +269,7 @@
             try {
                 const parsedContent = marked.parse(text);
                 currentDiv[0].innerHTML = parsedContent;
-                
+
                 // 获取消息容器
                 const messagesDiv = document.getElementById('chatMessages');
                 // 使用 requestAnimationFrame 确保在 DOM 更新后滚动

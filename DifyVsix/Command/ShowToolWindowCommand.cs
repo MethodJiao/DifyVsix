@@ -9,7 +9,7 @@ namespace DifyVsix
     /// <summary>
     /// Command handler
     /// </summary>
-    internal sealed class ToolWindowCommand
+    internal sealed class ShowToolWindowCommand
     {
         /// <summary>
         /// Command ID.
@@ -27,12 +27,12 @@ namespace DifyVsix
         private readonly AsyncPackage package;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ToolWindowCommand"/> class.
+        /// Initializes a new instance of the <see cref="ShowToolWindowCommand"/> class.
         /// Adds our command handlers for menu (commands must exist in the command table file)
         /// </summary>
         /// <param name="package">Owner package, not null.</param>
         /// <param name="commandService">Command service to add command to, not null.</param>
-        private ToolWindowCommand(AsyncPackage package, OleMenuCommandService commandService)
+        private ShowToolWindowCommand(AsyncPackage package, OleMenuCommandService commandService)
         {
             this.package = package ?? throw new ArgumentNullException(nameof(package));
             commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
@@ -45,7 +45,7 @@ namespace DifyVsix
         /// <summary>
         /// Gets the instance of the command.
         /// </summary>
-        public static ToolWindowCommand Instance
+        public static ShowToolWindowCommand Instance
         {
             get;
             private set;
@@ -73,7 +73,7 @@ namespace DifyVsix
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
 
             OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
-            Instance = new ToolWindowCommand(package, commandService);
+            Instance = new ShowToolWindowCommand(package, commandService);
         }
 
         /// <summary>

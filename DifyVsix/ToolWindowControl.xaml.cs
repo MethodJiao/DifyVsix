@@ -15,7 +15,8 @@ using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using static System.Net.Mime.MediaTypeNames;
-
+using Microsoft.VisualStudio.Shell.Interop;
+using System.Runtime.InteropServices;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
@@ -59,6 +60,9 @@ namespace DifyVsix
     }
     public partial class ToolWindowControl : UserControl
     {
+
+        private string conversationId;
+        private OptionPage optionPage;
 
         //读取解决方案
         private void ReadWorkspace()
@@ -326,10 +330,10 @@ namespace DifyVsix
                 if (mdview.CoreWebView2 != null)
                 {
                     mdview.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
-
                     // 确保启用了 Web 消息传递
                     // 默认通常是启用的，但最好检查一下
                     mdview.CoreWebView2.Settings.IsWebMessageEnabled = true;
+                    mdview.ZoomFactor = 1.0;
                 }
 
                 ////  加载本地 HTML 字符串
@@ -365,9 +369,62 @@ namespace DifyVsix
                 Console.WriteLine($"窗体初始化失败: {ex}");
             }
         }
+        /// <summary>
+        /// 加载配置项
+        /// </summary>
+        private void LoadOptionPage()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            IVsShell shell = (IVsShell)ServiceProvider.GlobalProvider.GetService(typeof(SVsShell));
+            if (shell == null)
+            {
+                // 核心服务获取失败，非常罕见
+                System.Diagnostics.Debug.Fail("无法获取 SVsShell 服务.");
+                return;
+            }
+
+            // 2. 获取您的 Package GUID
+            // 假设 MyVSPackage 是您的主 Package 类名
+            Guid packageGuid = new Guid(AICodingPackage.PackageGuidString);
+
+            IVsPackage package;
+            int hr = shell.IsPackageLoaded(
+                ref packageGuid,
+                out package); // 尝试获取已加载的 Package
+
+            if (hr != Microsoft.VisualStudio.VSConstants.S_OK || package == null)
+            {
+                // 未加载或加载失败：强制加载 (LoadPackage)
+                hr = shell.LoadPackage(ref packageGuid, out package);
+
+                if (hr != Microsoft.VisualStudio.VSConstants.S_OK || package == null)
+                {
+                    // 报告加载错误
+                    Marshal.ThrowExceptionForHR(hr);
+                    return;
+                }
+            }
+
+            // 3. 将 IVsPackage 转换为您的具体 Package 类型
+            AICodingPackage myPackage = package as AICodingPackage;
+            if (myPackage == null)
+            {
+                System.Diagnostics.Debug.Fail("Package 转换失败.");
+                return;
+            }
+
+            // 4. 获取 DialogPage
+            // 注意：GetDialogPage 仍需要在 UI 线程上调用
+            OptionPage optionPage = (OptionPage)myPackage.GetDialogPage(typeof(OptionPage));
+            this.optionPage = optionPage;
+        }
         private void MyToolWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             _ = Window_LoadedAsync(sender, e);
+
+            LoadOptionPage();
         }
         private async System.Threading.Tasks.Task StreamingOutputAsync(StreamReader reader)
         {
@@ -393,6 +450,7 @@ namespace DifyVsix
 
                     if (data == null)
                         continue;
+                    this.conversationId = data.ConversationId;
                     if (data.EventName != "message")
                         continue;
                     // 3. 成功解析，可以使用对象属性
@@ -452,26 +510,29 @@ namespace DifyVsix
             {
                 // async 逻辑写这里
                 string message = e.TryGetWebMessageAsString();
-
-                var options = new RestClientOptions("http://192.168.190.144/v1/chat-messages")
+                string ipAddress = "http://" + optionPage.IpAddress + "/v1/chat-messages";
+                var options = new RestClientOptions(ipAddress.Trim())
                 {
                     Timeout = TimeSpan.FromMinutes(5), // SSE长连接超时设置
                     ThrowOnAnyError = true
                 };
 
                 var client = new RestClient(options);
-                var request = new RestRequest("", RestSharp.Method.Post)
+                var request = new RestRequest("", Method.Post)
                 {
                     CompletionOption = HttpCompletionOption.ResponseHeadersRead // 关键：先读取响应头再处理流
                 };
-
-                request.AddHeader("Authorization", "Bearer app-8XPZct7dPmHbfhE1VuI30KG2");
+                string tokens = "Bearer " + optionPage.AccessToken.Trim();
+                request.AddHeader("Authorization", tokens);
                 request.AddHeader("Content-Type", "application/json");
                 request.AddHeader("Accept", "text/event-stream");
                 request.AddHeader("Accept-Encoding", "gzip, deflate, br");
                 request.AddHeader("User-Agent", "PostmanRuntime-ApipostRuntime/1.1.0");
                 request.AddHeader("Connection", "keep-alive");
-                request.AddParameter("application/json", "{\"inputs\":{},\"query\":\"" + message + "\",\"response_mode\":\"streaming\",\"conversation_id\":\"\",\"user\":\"abc-123\"}", ParameterType.RequestBody);
+                request.AddParameter("application/json", "{\"inputs\":{},\"query\":\"" + 
+                    message + "\",\"response_mode\":\"streaming\",\"conversation_id\":\"" + 
+                    conversationId + "\",\"user\":\""+ optionPage.UserName + "\"}", ParameterType.RequestBody);
+
                 var stream = await client.DownloadStreamAsync(request);
                 var reader = new StreamReader(stream, Encoding.UTF8);
                 // 循环读取，直到流结束 (即服务器断开连接)
@@ -482,21 +543,47 @@ namespace DifyVsix
                 Console.WriteLine($"流式请求失败: {ex}");
             }
         }
+        private void DteCommand_FileCompare(string file1Path, string file2Path)
+        {
+            DTE2 dte = (DTE2)Package.GetGlobalService(typeof(DTE));
+            if (dte == null || dte.ActiveDocument == null)
+            {
+                System.Diagnostics.Debug.WriteLine("未找到当前打开的文件");
+                return;
+            }
+            const string gitCommand = "Tools.DiffFiles";
+            string arguments = $"\"{file1Path}\" \"{file2Path}\"";
+            try
+            {
+                // 3. 执行命令
+                // 参数通常是可选的，这里不需要参数
+                dte.ExecuteCommand(gitCommand, arguments);
+            }
+            catch (Exception ex)
+            {
+                // 捕获命令执行失败
+                Console.WriteLine($"文件对比失败: {ex}");
+            }
+        }
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
+            //用户名校验
+            if(string.IsNullOrWhiteSpace(optionPage.UserName))
+            {
+                MessageBox.Show($"进入[扩展]->[AICoding设置]内配置用户名", "未正确配置用户名");
+                return;
+            }
+            
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             _ = CoreWebView2_WebMessageReceivedAsync(e);
             //_ = ConnectToMcpDifyWorkflowAsync(e.TryGetWebMessageAsString());
             //调用读取环境
             ReadWorkspace();
             //调用读取当前文件内容
             ReadCurrentFileContent();
-            //测试用，指定了输入的内容
-            string newContent = "//this is a new Content";
-            //覆盖的方式修改现有工作区代码
-            //ModifyCurrentFileContent(newContent);
-
-            //Merge的方式合并冲突
-            MergeFileContentWithConflict(newContent);
+            //文件对比
+            //DteCommand_FileCompare("C:\\Users\\Method-Jiao\\Desktop\\1.cpp", "C:\\Users\\Method-Jiao\\Desktop\\2.cpp");
         }
     }
 }

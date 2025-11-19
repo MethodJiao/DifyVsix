@@ -52,11 +52,31 @@ namespace DifyVsix
             // When initialized asynchronously, the current thread may be a background thread at this point.
             // Do any initialization that requires the UI thread after switching to the UI thread.
             await this.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-            await Command.InitializeAsync(this);
-            await ToolWindowCommand.InitializeAsync(this);
+            await ShowOptionPageCommand.InitializeAsync(this);
+            await ShowToolWindowCommand.InitializeAsync(this);
 
         }
 
         #endregion
+    }
+
+
+
+    [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
+    [Guid(AICodingPackage.PackageGuidString)] // 您的 Package GUID
+                                          // 注册您的 Options Page
+    [ProvideOptionPage(
+    typeof(OptionPage),            // 步骤 1 中创建的配置类
+    "AICoding插件",                // 选项页的主分类名称 (显示在左侧树状视图)
+    "通用设置",              // 选项页的子页面名称
+    0,                               // resourceID 1 (可选)
+    0,                               // resourceID 2 (可选)
+    true)]                           // 是否支持自动化
+    [ProvideProfile(typeof(OptionPage), "AICoding插件", "通用设置", 0, 0, true)] // 支持导入/导出设置
+    public sealed class AICodingPackage : AsyncPackage
+    {
+        public const string PackageGuidString = "e77de72c-f79b-4ecb-9ca4-5da4c3ba9d51";
+
+        // ... 其他 Package 逻辑
     }
 }
