@@ -205,6 +205,7 @@ namespace DifyVsix
         /// </summary>
         private void LoadOptionPage()
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             IVsShell shell = (IVsShell)ServiceProvider.GlobalProvider.GetService(typeof(SVsShell));
             if (shell == null)
             {
@@ -351,7 +352,7 @@ namespace DifyVsix
                 {
                     CompletionOption = HttpCompletionOption.ResponseHeadersRead // 关键：先读取响应头再处理流
                 };
-                string tokens = "Bearer " + optionPage.AccessToken;
+                string tokens = "Bearer " + optionPage.AccessToken.Trim();
                 request.AddHeader("Authorization", tokens);
                 request.AddHeader("Content-Type", "application/json");
                 request.AddHeader("Accept", "text/event-stream");

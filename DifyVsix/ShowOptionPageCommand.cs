@@ -12,7 +12,7 @@ namespace DifyVsix
     /// <summary>
     /// Command handler
     /// </summary>
-    internal sealed class Command
+    internal sealed class ShowOptionPageCommand
     {
         /// <summary>
         /// Command ID.
@@ -30,12 +30,12 @@ namespace DifyVsix
         private readonly AsyncPackage package;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="Command"/> class.
+        /// Initializes a new instance of the <see cref="ShowOptionPageCommand"/> class.
         /// Adds our command handlers for menu (commands must exist in the command table file)
         /// </summary>
         /// <param name="package">Owner package, not null.</param>
         /// <param name="commandService">Command service to add command to, not null.</param>
-        private Command(AsyncPackage package, OleMenuCommandService commandService)
+        private ShowOptionPageCommand(AsyncPackage package, OleMenuCommandService commandService)
         {
             this.package = package ?? throw new ArgumentNullException(nameof(package));
             commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
@@ -48,7 +48,7 @@ namespace DifyVsix
         /// <summary>
         /// Gets the instance of the command.
         /// </summary>
-        public static Command Instance
+        public static ShowOptionPageCommand Instance
         {
             get;
             private set;
@@ -76,9 +76,30 @@ namespace DifyVsix
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
 
             OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
-            Instance = new Command(package, commandService);
+            Instance = new ShowOptionPageCommand(package, commandService);
         }
+        private AICodingPackage GetMyPackageInstance()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
 
+            // 使用 IVsShell 强制加载 Package
+            IVsShell shell = (IVsShell)Microsoft.VisualStudio.Shell.ServiceProvider.GlobalProvider.GetService(typeof(SVsShell));
+            if (shell == null) return null;
+
+            Guid packageGuid = new Guid(AICodingPackage.PackageGuidString);
+            IVsPackage package;
+
+            // 尝试加载或获取已加载的 Package
+            int hr = shell.LoadPackage(ref packageGuid, out package);
+
+            if (hr == Microsoft.VisualStudio.VSConstants.S_OK && package is AICodingPackage myPackage)
+            {
+                return myPackage;
+            }
+
+            // 如果加载失败，或者转换失败
+            return null;
+        }
         /// <summary>
         /// This function is the callback used to execute the command when the menu item is clicked.
         /// See the constructor to see how the menu item is associated with this function using
@@ -89,17 +110,16 @@ namespace DifyVsix
         private void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            string message = "Hello World!";
-            string title = "Command";
 
-            // Show a message box to prove we were here
-            VsShellUtilities.ShowMessageBox(
-                this.package,
-                message,
-                title,
-                OLEMSGICON.OLEMSGICON_INFO,
-                OLEMSGBUTTON.OLEMSGBUTTON_OK,
-                OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
+            // 2. 获取 Package 实例 (使用 IVsShell 强制加载是最佳实践)
+            AICodingPackage myPackage = GetMyPackageInstance();
+
+            if (myPackage != null)
+            {
+                // 3. 调用 ShowOptionPage 来打开配置页
+                // 参数是您配置类的 Type
+                myPackage.ShowOptionPage(typeof(OptionPage));
+            }
         }
     }
 }
