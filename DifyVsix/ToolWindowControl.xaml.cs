@@ -15,7 +15,8 @@ using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using static System.Net.Mime.MediaTypeNames;
-
+using Microsoft.VisualStudio.Shell.Interop;
+using System.Runtime.InteropServices;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
@@ -57,6 +58,7 @@ namespace DifyVsix
     {
 
         //读取解决方案
+        private OptionPage optionPage;
         private void ReadWorkspace()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -198,9 +200,61 @@ namespace DifyVsix
                 Console.WriteLine($"窗体初始化失败: {ex}");
             }
         }
+        /// <summary>
+        /// 加载配置项
+        /// </summary>
+        private void LoadOptionPage()
+        {
+            IVsShell shell = (IVsShell)ServiceProvider.GlobalProvider.GetService(typeof(SVsShell));
+            if (shell == null)
+            {
+                // 核心服务获取失败，非常罕见
+                System.Diagnostics.Debug.Fail("无法获取 SVsShell 服务.");
+                return;
+            }
+
+            // 2. 获取您的 Package GUID
+            // 假设 MyVSPackage 是您的主 Package 类名
+            Guid packageGuid = new Guid(AICodingPackage.PackageGuidString);
+
+            IVsPackage package;
+            int hr = shell.IsPackageLoaded(
+                ref packageGuid,
+                out package); // 尝试获取已加载的 Package
+
+            if (hr != Microsoft.VisualStudio.VSConstants.S_OK || package == null)
+            {
+                // 未加载或加载失败：强制加载 (LoadPackage)
+                hr = shell.LoadPackage(ref packageGuid, out package);
+
+                if (hr != Microsoft.VisualStudio.VSConstants.S_OK || package == null)
+                {
+                    // 报告加载错误
+                    Marshal.ThrowExceptionForHR(hr);
+                    return;
+                }
+            }
+
+            // 3. 将 IVsPackage 转换为您的具体 Package 类型
+            AICodingPackage myPackage = package as AICodingPackage;
+            if (myPackage == null)
+            {
+                System.Diagnostics.Debug.Fail("Package 转换失败.");
+                return;
+            }
+
+            // 4. 获取 DialogPage
+            // 注意：GetDialogPage 仍需要在 UI 线程上调用
+            OptionPage optionPage = (OptionPage)myPackage.GetDialogPage(typeof(OptionPage));
+            this.optionPage = optionPage;
+        }
         private void MyToolWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             _ = Window_LoadedAsync(sender, e);
+
+            LoadOptionPage();
         }
         private async System.Threading.Tasks.Task StreamingOutputAsync(StreamReader reader)
         {
@@ -285,20 +339,20 @@ namespace DifyVsix
             {
                 // async 逻辑写这里
                 string message = e.TryGetWebMessageAsString();
-
-                var options = new RestClientOptions("http://192.168.190.144/v1/chat-messages")
+                string ipAddress = "http://" + optionPage.IpAddress + "/v1/chat-messages";
+                var options = new RestClientOptions(ipAddress.Trim())
                 {
                     Timeout = TimeSpan.FromMinutes(5), // SSE长连接超时设置
                     ThrowOnAnyError = true
                 };
 
                 var client = new RestClient(options);
-                var request = new RestRequest("", RestSharp.Method.Post)
+                var request = new RestRequest("", Method.Post)
                 {
                     CompletionOption = HttpCompletionOption.ResponseHeadersRead // 关键：先读取响应头再处理流
                 };
-
-                request.AddHeader("Authorization", "Bearer app-8XPZct7dPmHbfhE1VuI30KG2");
+                string tokens = "Bearer " + optionPage.AccessToken;
+                request.AddHeader("Authorization", tokens);
                 request.AddHeader("Content-Type", "application/json");
                 request.AddHeader("Accept", "text/event-stream");
                 request.AddHeader("Accept-Encoding", "gzip, deflate, br");
@@ -339,8 +393,10 @@ namespace DifyVsix
         }
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
-            _ = CoreWebView2_WebMessageReceivedAsync(e);
             ThreadHelper.ThrowIfNotOnUIThread();
+
+            _ = CoreWebView2_WebMessageReceivedAsync(e);
+            
             //调用读取环境
             ReadWorkspace();
             //调用读取当前文件内容
