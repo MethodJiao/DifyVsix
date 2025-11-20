@@ -21,6 +21,10 @@ using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
 
+using DiffPlex;
+using DiffPlex.DiffBuilder;
+using DiffPlex.DiffBuilder.Model;
+
 namespace DifyVsix
 {
     /// <summary>
@@ -133,6 +137,169 @@ namespace DifyVsix
                 System.Diagnostics.Debug.WriteLine($"读取文件失败: {ex.Message}");
             }
         }
+
+        //改变当前文件内容
+        private void ModifyCurrentFileContent(string newContent)
+        {
+            
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            DTE2 dte = (DTE2)Package.GetGlobalService(typeof(DTE));
+            if (dte == null || dte.ActiveDocument == null)
+            {
+                System.Diagnostics.Debug.WriteLine("未找到当前打开的文件");
+                return;
+             }
+
+            string filePath = dte.ActiveDocument.FullName;
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            {
+                System.Diagnostics.Debug.WriteLine("当前文件路径无效或文件不存在");
+                return;
+            }
+
+            try
+            {
+                // 写入新的内容
+                System.IO.File.WriteAllText(filePath, newContent, Encoding.UTF8);
+                System.Diagnostics.Debug.WriteLine($"已修改文件: {filePath}");
+
+                // 重新加载文档到编辑器
+                dte.ActiveDocument.Close(vsSaveChanges.vsSaveChangesNo);
+                dte.ItemOperations.OpenFile(filePath);
+
+                // 如果需要同步到前端 WebView2，可以调用 JS
+                string safeContent = newContent
+                    .Replace("\\", "\\\\")
+                   .Replace("'", "\\'")
+                    .Replace("\"", "\\\"")
+                    .Replace("\r\n", "\\n")
+                    .Replace("\n", "\\n");
+
+                string jsCode = $"showFileContent('{safeContent}');";
+                _ = mdview.CoreWebView2.ExecuteScriptAsync(jsCode);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"修改文件失败: {ex.Message}");
+            }
+        }
+
+        //通过Merge的方式改变冲突
+        private void MergeFileContentWithConflict(string newContent)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            DTE2 dte = (DTE2)Package.GetGlobalService(typeof(DTE));
+            if (dte == null || dte.ActiveDocument == null)
+            {
+                System.Diagnostics.Debug.WriteLine("未找到当前打开的文件");
+                return;
+            }
+
+            string filePath = dte.ActiveDocument.FullName;
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            {
+                System.Diagnostics.Debug.WriteLine("当前文件路径无效或文件不存在");
+                return;
+            }
+
+            string oldContent = System.IO.File.ReadAllText(filePath, Encoding.UTF8);
+
+            // 使用 DiffPlex 生成差异
+            var diffBuilder = new SideBySideDiffBuilder(new Differ());
+            var diffResult = diffBuilder.BuildDiffModel(oldContent, newContent);
+
+            // 构造一个冲突文本，类似 Git merge 格式
+            StringBuilder conflictText = new StringBuilder();
+            foreach (var line in diffResult.NewText.Lines)
+            {
+                switch (line.Type)
+                {
+                    case ChangeType.Unchanged:
+                        conflictText.AppendLine(line.Text);
+                        break;
+                    case ChangeType.Inserted:
+                        conflictText.AppendLine("<<<<<<< 新代码");
+                        conflictText.AppendLine(line.Text);
+                        conflictText.AppendLine("=======");
+                        conflictText.AppendLine(">>>>>>> 原有代码");
+                        break;
+                    case ChangeType.Deleted:
+                        conflictText.AppendLine("<<<<<<< 原有代码");
+                        conflictText.AppendLine(line.Text);
+                        conflictText.AppendLine("=======");
+                        conflictText.AppendLine(">>>>>>> 新代码");
+                        break;
+                    case ChangeType.Modified:
+                        conflictText.AppendLine("<<<<<<< 原有代码");
+                        conflictText.AppendLine(line.Text ?? "");
+                        conflictText.AppendLine("=======");
+                        conflictText.AppendLine(line.Text);
+                        conflictText.AppendLine(">>>>>>> 新代码");
+                        break;
+                }
+            }
+
+            // 弹出一个窗口让用户选择
+            var result = MessageBox.Show(
+                "检测到代码冲突，是否应用新代码？\n选择“否”保留原有代码，选择“取消”查看冲突详情。",
+                "代码冲突合并",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning
+            );
+
+            if (result == MessageBoxResult.Yes)
+            {
+                System.IO.File.WriteAllText(filePath, newContent, Encoding.UTF8);
+                dte.ActiveDocument.Close(vsSaveChanges.vsSaveChangesNo);
+                dte.ItemOperations.OpenFile(filePath);
+            }
+            else if (result == MessageBoxResult.No)
+            {
+                // 保留旧代码
+            }
+            else
+            {
+                // 显示冲突详情（可以写入一个临时文件并打开）
+                string conflictFile = filePath + ".conflict";
+                System.IO.File.WriteAllText(conflictFile, conflictText.ToString(), Encoding.UTF8);
+                dte.ItemOperations.OpenFile(conflictFile);
+            }
+        }
+
+
+
+        //通过MCP服务器的方式调用DIFY
+        public async System.Threading.Tasks.Task ConnectToMcpDifyWorkflowAsync(string userQuery)
+        {
+            try
+            {
+                var requestPayload = new
+                {
+                    jsonrpc= "2.0",
+                    problem_description = new { query = userQuery },
+                    response_mode = "streaming",
+                    user = "abc-123"
+                };
+                string mcpUri = "http://192.168.190.144/mcp/server/D6ScniyTQUtBapP7/mcp";
+                var client = new HttpClient();
+                string json = JsonConvert.SerializeObject(requestPayload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                Console.WriteLine(" 发送 JSON-RPC 请求...");
+                var response = await client.PostAsync(mcpUri, content);
+                string result = await response.Content.ReadAsStringAsync();
+
+                Console.WriteLine(" JSON-RPC 响应:");
+                Console.WriteLine(result);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"MCP SSE连接失败: {ex.Message}");
+            }
+        }
+
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ToolWindowControl"/> class.
@@ -410,7 +577,7 @@ namespace DifyVsix
             ThreadHelper.ThrowIfNotOnUIThread();
 
             _ = CoreWebView2_WebMessageReceivedAsync(e);
-
+            //_ = ConnectToMcpDifyWorkflowAsync(e.TryGetWebMessageAsString());
             //调用读取环境
             ReadWorkspace();
             //调用读取当前文件内容
