@@ -35,6 +35,14 @@
             color: var(--vscode-text);
         }
 
+        .ai-warning {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #A0A0A0;
+            opacity: 0.8;
+            text-align: center;
+        }
+
         .chat-container {
             width: 100%;
             min-width: 243px;
@@ -52,7 +60,7 @@
             overflow-y: auto;
             padding: 8px;
             margin-bottom: 16px;
-            height: calc(100vh - 113px);
+            height: calc(100vh - 135px);
             scrollbar-width: thin;
             scrollbar-color: var(--vscode-border) transparent;
         }
@@ -207,6 +215,7 @@
             <textarea id="userInput" placeholder="输入你的消息..." onkeydown="handleKeyPress(event)" oninput="autoResize(this)"></textarea>
             <button class="send-button" onclick="sendMessage()">发送</button>
         </div>
+        <div class="ai-warning">AICoding也可能会犯错，请核查重要信息。</div>
     </div>
 
     <script>
