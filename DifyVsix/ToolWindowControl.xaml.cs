@@ -403,7 +403,7 @@ namespace DifyVsix
             //用户名校验
             if(string.IsNullOrWhiteSpace(optionPage.UserName))
             {
-                MessageBox.Show($"进入[扩展]->[AICoding设置]内配置用户名", "未正确配置用户名");
+                MessageBox.Show($"首次使用请先进入[扩展]->[AICoding设置]内配置用户名", "未正确配置用户名");
                 return;
             }
             
