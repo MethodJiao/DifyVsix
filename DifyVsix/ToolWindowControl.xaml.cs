@@ -138,7 +138,7 @@ namespace DifyVsix
         //改变当前文件内容
         private void ModifyCurrentFileContent(string newContent)
         {
-            
+
             ThreadHelper.ThrowIfNotOnUIThread();
 
             DTE2 dte = (DTE2)Package.GetGlobalService(typeof(DTE));
@@ -146,7 +146,7 @@ namespace DifyVsix
             {
                 System.Diagnostics.Debug.WriteLine("未找到当前打开的文件");
                 return;
-             }
+            }
 
             string filePath = dte.ActiveDocument.FullName;
             if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
@@ -182,7 +182,7 @@ namespace DifyVsix
             }
         }
 
-        
+
 
 
 
@@ -193,11 +193,13 @@ namespace DifyVsix
             {
                 var requestPayload = new
                 {
-                    jsonrpc= "2.0",
+                    jsonrpc = "2.0",
                     name = "AICoding备份",
-                    inputSchema = new { 
+                    inputSchema = new
+                    {
                         type = "object",
-                        properties = new {
+                        properties = new
+                        {
                             problem_description = new
                             {
                                 type = "string",
@@ -430,12 +432,38 @@ namespace DifyVsix
                 Console.WriteLine($"JSON解析失败: {ex.Message}");
             }
         }
+        /// <summary>
+        /// 处理ui内置命令消息
+        /// </summary>
+        /// <param name="msg"></param>
+        /// <returns>返回值决定是否截断当前消息响应</returns>
+        private bool HandleCmdMessages(string msg)
+        {
+            if (!msg.StartsWith("$cmd$"))
+                return true;
+            // 从前缀长度的位置开始截取，直到字符串末尾
+            string realCmd = msg.Substring("$cmd$".Length);
+
+            if ("new_session" == realCmd)
+            {
+                conversationId = "";//清空会话id
+                return false;
+            }
+            if ("reset_ui" == realCmd)
+            {
+                return false;
+            }
+            return true;
+        }
         private async System.Threading.Tasks.Task CoreWebView2_WebMessageReceivedAsync(CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
             {
-                // async 逻辑写这里
+                //先响应命令消息处理流程
                 string message = e.TryGetWebMessageAsString();
+                if (!HandleCmdMessages(message))
+                    return;
+                // async 逻辑写这里
                 string ipAddress = "http://" + optionPage.IpAddress + "/v1/chat-messages";
                 var options = new RestClientOptions(ipAddress.Trim())
                 {
@@ -455,9 +483,9 @@ namespace DifyVsix
                 request.AddHeader("Accept-Encoding", "gzip, deflate, br");
                 request.AddHeader("User-Agent", "PostmanRuntime-ApipostRuntime/1.1.0");
                 request.AddHeader("Connection", "keep-alive");
-                request.AddParameter("application/json", "{\"inputs\":{},\"query\":\"" + 
-                    message + "\",\"response_mode\":\"streaming\",\"conversation_id\":\"" + 
-                    conversationId + "\",\"user\":\""+ optionPage.UserName + "\"}", ParameterType.RequestBody);
+                request.AddParameter("application/json", "{\"inputs\":{},\"query\":\"" +
+                    message + "\",\"response_mode\":\"streaming\",\"conversation_id\":\"" +
+                    conversationId + "\",\"user\":\"" + optionPage.UserName + "\"}", ParameterType.RequestBody);
 
                 var stream = await client.DownloadStreamAsync(request);
                 var reader = new StreamReader(stream, Encoding.UTF8);
@@ -494,12 +522,12 @@ namespace DifyVsix
         private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             //用户名校验
-            if(string.IsNullOrWhiteSpace(optionPage.UserName))
+            if (string.IsNullOrWhiteSpace(optionPage.UserName))
             {
                 MessageBox.Show($"首次使用请先进入[扩展]->[AICoding设置]内配置用户名", "未正确配置用户名");
                 return;
             }
-            
+
             ThreadHelper.ThrowIfNotOnUIThread();
 
             _ = CoreWebView2_WebMessageReceivedAsync(e);

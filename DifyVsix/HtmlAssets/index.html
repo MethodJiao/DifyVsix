@@ -24,6 +24,8 @@
             --vscode-input-bg: #333333;
             --vscode-selection: #264F78;
             --vscode-highlight: #37373d;
+            --vscode-header-bg: #333333;
+            --vscode-header-fg: #CCCCCC;
         }
 
         body {
@@ -33,7 +35,52 @@
             display: flex;
             flex-direction: column;
             color: var(--vscode-text);
+            overflow: hidden; /* 防止body出现滚动条 */
         }
+
+        /* --- 新增：顶部工具栏样式 --- */
+        .header-bar {
+            display: flex;
+            justify-content: space-between; /* 两端对齐 */
+            align-items: center;
+            padding: 0 16px;
+            height: 25px;
+            background-color: var(--vscode-sidebar);
+            border-bottom: 1px solid var(--vscode-border);
+            flex-shrink: 0; /* 防止被压缩 */
+        }
+
+        .header-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--vscode-header-fg);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .header-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--vscode-header-fg);
+            padding: 4px 4px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+
+            .header-btn:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+                color: #FFFFFF;
+            }
+
+        /* 危险操作（如重置）可以加一点微红的hover效果，可选 */
+        /* .header-btn.danger:hover { background-color: #dba8a830; } */
+
+        /* --- End Header --- */
 
         .ai-warning {
             margin-top: 4px;
@@ -41,6 +88,7 @@
             color: #A0A0A0;
             opacity: 0.8;
             text-align: center;
+            padding-bottom: 4px;
         }
 
         .chat-container {
@@ -53,14 +101,15 @@
             display: flex;
             flex-direction: column;
             padding: clamp(6px, 1.2vw, 12px);
+            height: 100%; /* 占满剩余空间 */
+            overflow: hidden; /* 内部滚动 */
         }
 
         .chat-messages {
-            flex-grow: 1;
+            flex: 1; /* 自动占据剩余高度，替代 calc */
             overflow-y: auto;
             padding: 8px;
-            margin-bottom: 16px;
-            height: calc(100vh - 135px);
+            margin-bottom: 8px;
             scrollbar-width: thin;
             scrollbar-color: var(--vscode-border) transparent;
         }
@@ -99,8 +148,6 @@
             margin: 0 8px;
             border: 1px solid var(--vscode-border);
             font-size: 12px;
-            /* white-space: pre-wrap; */
-            /* word-wrap: break-word; */
         }
 
             .message-content pre {
@@ -155,7 +202,7 @@
             padding: 8px;
             background: var(--vscode-sidebar);
             border-radius: 2px;
-            margin-top: 8px;
+            flex-shrink: 0; /* 防止被压缩 */
         }
 
         textarea {
@@ -188,9 +235,10 @@
             cursor: pointer;
             transition: all 0.2s ease;
             font-size: 12px;
-            align-self: flex-end;
+            align-self: flex-end; /* 底部对齐 */
             min-width: 60px;
             opacity: 0.9;
+            min-height: 36px;
         }
 
             button.send-button:hover {
@@ -204,6 +252,15 @@
     </style>
 </head>
 <body>
+    <!-- 新增：顶部工具栏 -->
+    <div class="header-bar">
+        <div class="header-title">Chat Mode</div>
+        <div class="header-actions">
+            <button class="header-btn" onclick="newSession()" title="清除上下文并开始新对话">✚</button>
+            <button class="header-btn" onclick="resetChat()" title="仅清空当前屏幕显示">✂</button>
+        </div>
+    </div>
+
     <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">
@@ -221,6 +278,37 @@
 
     <script>
         var currentDiv; // 用于存储当前正在编辑的 div
+
+        // --- 新增：按钮功能函数 ---
+        function newSession() {
+            // 1. 清空界面
+            const messagesDiv = document.getElementById('chatMessages');
+            messagesDiv.innerHTML = '';
+
+            // 2. 添加默认欢迎语
+            const welcomeDiv = document.createElement('div');
+            welcomeDiv.className = 'message bot';
+            welcomeDiv.innerHTML = '<div class="message-content">已开启新会话。</div>';
+            messagesDiv.appendChild(welcomeDiv);
+
+            // 3. 发送指令给 WebView (后端处理上下文清除)
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage("$cmd$new_session");
+            }
+        }
+
+        function resetChat() {
+            // 仅清空 UI，不一定清除后端上下文（根据需求调整）
+            const messagesDiv = document.getElementById('chatMessages');
+            messagesDiv.innerHTML = '';
+
+            // 可选：通知后端 UI 已重置
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage("$cmd$reset_ui");
+            }
+        }
+        // ------------------------
+
         function sendMessage() {
             const input = document.getElementById('userInput');
             const message = input.value.trim();
@@ -229,8 +317,13 @@
                 addMessage(message, 'user');
                 input.value = '';
 
+                // 重置高度：移除内联样式，让 CSS 的 min-height 生效
+                input.style.height = '';
+
                 // 发送消息到WebView
-                window.chrome.webview.postMessage(message);
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(message);
+                }
             }
         }
 
@@ -253,7 +346,6 @@
 
             // 解析 Markdown
             const parsedContent = marked.parse(text);
-            // messageDiv.innerHTML = `<div class="message-content">${text}</div>`;
             messageDiv.innerHTML = `<div class="message-content">${parsedContent}</div>`;
             messagesDiv.appendChild(messageDiv);
             currentDiv = messageDiv.getElementsByClassName('message-content');
@@ -266,41 +358,47 @@
 
             return 'ok';
         }
+
         function setMessage(text) {
             // 在解析前配置 marked 选项
             marked.setOptions({
-                breaks: true,     // 将换行符转换为 <br>
-                gfm: true,       // 启用 GitHub 风格的 Markdown
+                breaks: true,      // 将换行符转换为 <br>
+                gfm: true,        // 启用 GitHub 风格的 Markdown
                 mangle: false,    // 防止改变文本内容
                 headerIds: false, // 防止为标题添加 id
-                silent: true     // 忽略解析错误
+                silent: true      // 忽略解析错误
             });
 
             try {
                 const parsedContent = marked.parse(text);
-                currentDiv[0].innerHTML = parsedContent;
+                if (currentDiv && currentDiv[0]) {
+                    currentDiv[0].innerHTML = parsedContent;
 
-                // 获取消息容器
-                const messagesDiv = document.getElementById('chatMessages');
-                // 使用 requestAnimationFrame 确保在 DOM 更新后滚动
-                requestAnimationFrame(() => {
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                });
+                    // 获取消息容器
+                    const messagesDiv = document.getElementById('chatMessages');
+                    // 使用 requestAnimationFrame 确保在 DOM 更新后滚动
+                    requestAnimationFrame(() => {
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    });
 
-                // 如果有代码块，重新应用高亮
-                currentDiv[0].querySelectorAll('pre code').forEach((block) => {
-                    hljs.highlightBlock(block);
-                });
+                    // 如果有代码块，重新应用高亮
+                    currentDiv[0].querySelectorAll('pre code').forEach((block) => {
+                        hljs.highlightBlock(block);
+                    });
+                }
             } catch (e) {
                 // 如果解析失败，直接显示纯文本（保留换行）
-                currentDiv[0].innerHTML = text
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/\n/g, '<br>');
+                if (currentDiv && currentDiv[0]) {
+                    currentDiv[0].innerHTML = text
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>');
+                }
             }
             return 'ok';
         }
+
         function handleKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -309,8 +407,13 @@
         }
 
         function autoResize(textarea) {
+            // 先重置为 auto 以获取正确的 scrollHeight（处理缩减的情况）
             textarea.style.height = 'auto';
-            textarea.style.height = (textarea.scrollHeight) + 'px';
+            // scrollHeight 包含 padding 但不含 border。
+            // 因为 box-sizing 是 border-box，style.height 代表包含 border 的总高度。
+            // 所以需要 +2px (上下边框) 来补偿。
+            // 同时使用 Math.max 确保高度不小于 CSS 定义的 min-height (36px)。
+            textarea.style.height = (Math.max(textarea.scrollHeight + 2, 36)) + 'px';
         }
     </script>
 </body>
