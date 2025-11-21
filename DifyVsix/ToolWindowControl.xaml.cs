@@ -20,7 +20,8 @@ using System.Runtime.InteropServices;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
-
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace DifyVsix
 {
@@ -182,10 +183,6 @@ namespace DifyVsix
             }
         }
 
-
-
-
-
         //通过MCP服务器的方式调用DIFY
         public async System.Threading.Tasks.Task ConnectToMcpDifyWorkflowAsync(string userQuery)
         {
@@ -227,6 +224,129 @@ namespace DifyVsix
                 System.Diagnostics.Debug.WriteLine($"MCP SSE连接失败: {ex.Message}");
             }
         }
+
+
+        /// <summary>
+        /// 将文本中可能出现的多段不连续代码片段分别包装为 Markdown 代码块。
+        /// - 保留已有 ``` 代码块不变
+        /// - 按空行分段，对每段做启发式判断，若判定为代码则用 ```lang 或 ``` 包裹
+        /// </summary>
+        private string WrapCodeSegmentsInText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return text;
+
+            // 分割保留空行分隔符
+            var parts = Regex.Split(text, @"(\r?\n\s*\r?\n)");
+            var sb = new StringBuilder();
+
+            foreach (var part in parts)
+            {
+                if (string.IsNullOrWhiteSpace(part))
+                {
+                    sb.Append(part);
+                    continue;
+                }
+
+                // 已包含代码块标记，直接保留
+                if (part.Contains("```"))
+                {
+                    sb.Append(part);
+                    continue;
+                }
+
+                int newlineCount = part.Count(c => c == '\n');
+                int semicolonCount = part.Count(c => c == ';');
+                bool hasBraces = part.Contains("{") || part.Contains("}");
+                bool hasIncludes = part.Contains("#include") || part.Contains("using ") || part.Contains("namespace ");
+                bool hasStd = part.Contains("std::") || part.Contains("Console.Write") || part.Contains("printf(");
+                bool hasKeywords = part.Contains("public ") || part.Contains("private ") || part.Contains("class ") || part.Contains("def ") || part.Contains("function ");
+
+                bool likelyCode = false;
+                if (newlineCount >= 1 && (semicolonCount > 0 || hasBraces || hasIncludes || hasStd || hasKeywords))
+                    likelyCode = true;
+                if (!likelyCode && (part.Contains("=>") || part.TrimStart().StartsWith("#include") || part.Contains("; ") || part.Contains("()") || part.Contains("->")))
+                    likelyCode = true;
+
+                if (!likelyCode)
+                {
+                    sb.Append(part);
+                    continue;
+                }
+
+                // 猜测语言标签
+                string sample = part.Length > 200 ? part.Substring(0, 200).ToLower() : part.ToLower();
+                string langTag = "";
+                if (sample.Contains("using ") || sample.Contains("namespace ") || sample.Contains("console.writeline") || sample.Contains("class "))
+                    langTag = "csharp";
+                else if (sample.Contains("#include") || sample.Contains("std::") || sample.Contains("cout") || sample.Contains("printf"))
+                    langTag = "cpp";
+                else if (sample.Contains("def ") || sample.Contains("import ") || sample.Contains("print("))
+                    langTag = "python";
+                else if (sample.Contains("function ") || sample.Contains("console.log") || sample.Contains("=>"))
+                    langTag = "javascript";
+
+                if (!string.IsNullOrEmpty(langTag))
+                    sb.Append($"```{langTag}\n{part}\n```");
+                else
+                    sb.Append($"```\n{part}\n```");
+            }
+
+            return sb.ToString();
+        }
+
+
+        /// <summary>
+        /// 简单启发式判断文本是否为代码，如果是则把文本包装成代码块（若已是代码块则保留）。
+        /// 该判断尽量保持宽松，避免误伤普通文本。
+        /// </summary>
+        private string WrapCodeIfNeeded(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return text;
+
+            // 如果已经含有 ``` 则认为已经是代码块
+            if (text.Contains("```"))
+                return text;
+
+            // 基于多种特征的简单启发式判断
+            int newlineCount = text.Count(c => c == '\n');
+            int semicolonCount = text.Count(c => c == ';');
+            bool hasBraces = text.Contains("{") || text.Contains("}");
+            bool hasIncludes = text.Contains("#include") || text.Contains("using ") || text.Contains("namespace ");
+            bool hasStd = text.Contains("std::") || text.Contains("Console.Write") || text.Contains("printf(");
+            bool hasKeywords = text.Contains("public ") || text.Contains("private ") || text.Contains("class ") || text.Contains("def ") || text.Contains("function ");
+            bool likelyCode = false;
+
+            // 多行且包含常见代码标记
+            if (newlineCount >= 1 && (semicolonCount > 0 || hasBraces || hasIncludes || hasStd || hasKeywords))
+                likelyCode = true;
+
+            // 单行但包含常见代码分隔符或函数签名
+            if (!likelyCode && (text.Contains("=>") || text.TrimStart().StartsWith("#include") || text.Contains("; ") || text.Contains("()") || text.Contains("->")))
+                likelyCode = true;
+
+            if (!likelyCode)
+                return text;
+
+            // 尝试猜测语言标签（优先 C# / C++ / Python / JS），可为空则使用无语言的代码块
+            string langTag = "";
+            string sample = text.Substring(0, Math.Min(200, text.Length)).ToLower();
+            if (sample.Contains("using ") || sample.Contains("namespace ") || sample.Contains("console.writeline") || sample.Contains("class "))
+                langTag = "csharp";
+            else if (sample.Contains("#include") || sample.Contains("std::") || sample.Contains("cout") || sample.Contains("printf"))
+                langTag = "cpp";
+            else if (sample.Contains("def ") || sample.Contains("import ") || sample.Contains("print("))
+                langTag = "python";
+            else if (sample.Contains("function ") || sample.Contains("console.log") || sample.Contains("=>"))
+                langTag = "javascript";
+
+            if (!string.IsNullOrEmpty(langTag))
+                return $"```{langTag}\n{text}\n```";
+            else
+                return $"```\n{text}\n```";
+        }
+
 
 
         /// <summary>
@@ -386,9 +506,16 @@ namespace DifyVsix
                     // 流式输出中
 
                     alltext += data.Answer;
+
+                    // 将返回内容中所有潜在的不连续代码段逐段包装为代码块
+                    string processed = WrapCodeIfNeeded(alltext);
+
                     if (firstIn)
                     {
                         string tempText = alltext;
+
+                        tempText = processed;
+
                         tempText = tempText
                             .Replace("\\", "\\\\") // 先转义反斜杠
                             .Replace("'", "\\'")   // 转义单引号
@@ -410,6 +537,7 @@ namespace DifyVsix
                     }
 
                     string tempTextAdd = alltext;
+                    tempTextAdd = processed;
                     tempTextAdd = tempTextAdd
                         .Replace("\\", "\\\\") // 先转义反斜杠
                         .Replace("'", "\\'")   // 转义单引号
